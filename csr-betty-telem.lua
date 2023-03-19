@@ -21,10 +21,12 @@ function split8(val)
     return bit.band(val, 0x0F), bit.band(bit.rshift(val,4), 0x0F)
 end
 
-
+-- Read the TPMS data and encode pressure and temperature messages
 function processTpms()
     local canChannel = 1
     local id, ext, data = rxCAN(canChannel, 100)
+    local txPressureData = {0,0,0,0,0,0,0,0}
+    local txTempData = {0,0,0,0,0,0,0,0}
 
     if id ~= nil and ext == 0 and id == 1602 then -- 4 x 12 position switch
         flPos, frPos = split8(data[1])
@@ -34,16 +36,26 @@ function processTpms()
     if flPos > 0 and frPos > 0 and rlPos > 0 and rrPos > 0 then -- ensure we know all switch positions
         for k,v in ipairs({flPos, frPos, rlPos, rrPos}) do
             if id ~= nil and ext == 1 and id == tpmsSensorIds[v] then
+                -- debug
                 println("Processing TPMS sensor " .. tpmsSensorIds[v])
-                rxTxPressureTemp(data)
+                println("Pressure: " .. data[1] .. " PSI")
+                println("Temp: " .. data[3] .. " C")
+                -- end debug
+                txPressureData[(k * 2) - 1] = data[1]
+                txTempData[k] = data[3]
             end
         end
     end
+    txTpmsData(txPressureData, txTempData)
 end
 
-function rxTxPressureTemp(data)
-    println("Pressure: " .. data[1] .. " PSI")
-    println("Temp: " .. data[3] .. " C")
+-- Transmit TPMS pressure and temperature data
+function txTpmsData(pressure, temp)
+    local canChannel = 1
+    local idP = 512
+    local idT = 513
+    txCAN(canChannel, idP, 0, pressure)
+    txCAN(canChannel, idT, 0, pressure)
 end
 
 function onTick()
